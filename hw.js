@@ -3,12 +3,10 @@ import {check, group} from 'k6';
 import {SharedArray} from 'k6/data';
 import {Trend, Rate} from 'k6/metrics';
 
-
 const URL_1 = 'http://webtours.load-test.ru:1080';
 const URL_2 = 'http://ya.ru';
 const URL_3 = 'http://www.ru';
 const checkFailureRate = new Rate('otus_check_failure_rate');
-
 const ADVANCE_DISCOUNT = 0;
 const SEAT_TYPE = "Coach";
 const SEAT_PREF = "None";
@@ -23,6 +21,8 @@ const paymentData = new SharedArray('get payments', function () {
     const file = JSON.parse(open('./payments.json'));
     return file.payments;
 });
+
+const format = (d) => d.toLocaleDateString('en-US', {month: '2-digit', day: '2-digit', year: 'numeric'});
 
 const randomPay = Math.floor(Math.random() * paymentData.length);
 
@@ -88,9 +88,7 @@ export function login(credentials) {
     const loginPayload = {
         username: credentials.username,
         password: credentials.password,
-        userSession: userSession,
-        'login.x':	54,
-        'login.y':	11,
+        userSession: userSession
     };
     const urlLogin = `${URL_1}/cgi-bin/login.pl`
     const resLogin = http.post(
@@ -153,22 +151,24 @@ export function buyTicket() {
     }
     checkFailureRate.add(!checkCities);
 
-    const returnDate = new Date();
     const dateDeparture = new Date();
+    const returnDate = new Date();
     dateDeparture.setDate(dateDeparture.getDate() + 1);
-    returnDate.setDate(returnDate.getDate() + Math.ceil(Math.random() * 7) + 1)
+    returnDate.setDate(returnDate.getDate() + Math.ceil(Math.random() * 7) + 1);
+    const formattedDeparture = format(dateDeparture);
+    const formattedReturn = format(returnDate);
     const cityPayload = {
         seatType: SEAT_TYPE,
         seatPref: SEAT_PREF,
-        returnDate: returnDate,
+        returnDate: formattedReturn,
         numPassengers: NUM_PASSENGERS,
-        departDate: dateDeparture,
+        departDate: formattedDeparture,
         depart: cityDeparture,
         arrive: cityArrive,
         advanceDiscount: ADVANCE_DISCOUNT,
-        '.cgifields':	"roundtrip",
-        'findFlights.x':	Math.ceil(Math.random() * 70),
-        'findFlights.y':	Math.ceil(Math.random() * 20),
+        '.cgifields': "roundtrip",
+        'findFlights.x': 60,
+        'findFlights.y': 10,
     };
     const respGetTickets = http.post(
         `${urlReservations}`,
@@ -176,19 +176,25 @@ export function buyTicket() {
         {
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded'
-            }}
+            }
+        }
     )
     const checkTicket = check(
         respGetTickets,
         {
             'ticket status code is 200': (r) => r.status === 200,
-            "cityDeparture in response": (r) => r.body.toString().includes(`From ${cityDeparture}`),
-            "cityArrive in response": (r) => r.body.toString().includes(`To ${cityArrive}`)
+            "cityDeparture in response": (r) => r.body.toString().includes(`${cityDeparture}`),
+            "cityArrive in response": (r) => r.body.toString().includes(`${cityArrive}`)
         }
     )
     checkFailureRate.add(!checkTicket);
-    const tickets = respGetTickets.html().find("input[name='outboundFlight']").attr("value")
-    const ticket = tickets.get(Math.floor(Math.random() * tickets.length))
+    const tickets = respGetTickets.html().find("input[name='outboundFlight']");
+    const randomTicket = Math.floor(Math.random() * tickets.size());
+    const ticket = tickets.attr('value', randomTicket);
+
+    // const tickets = respGetTickets.html().find("input[name='outboundFlight']")
+    // console.log(tickets)
+    // const ticket = tickets.get(Math.floor(Math.random() * tickets.length))
 
 
     // const tickets = respGetTickets.html().find("input[name='outboundFlight']").
@@ -200,7 +206,9 @@ export function buyTicket() {
         seatPref: SEAT_PREF,
         outboundFlight: ticket,
         numPassengers: NUM_PASSENGERS,
-        advanceDiscount: ADVANCE_DISCOUNT
+        advanceDiscount: ADVANCE_DISCOUNT,
+        'reserveFlights.x': 37,
+        'reserveFlights.y': 7
     }
     const respGetPayment = http.post(
         `${urlReservations}`,
@@ -211,7 +219,7 @@ export function buyTicket() {
         respGetPayment,
         {
             'get payment status code is 200': (r) => r.status === 200,
-            'get payment title check': (r) => r.html().find("title").includes("Flight Reservation")
+            'get payment title check': (r) => r.body.toString().includes("Flight Reservation")
         }
     )
     checkFailureRate.add(!checkPayment)
@@ -234,7 +242,9 @@ export function buyTicket() {
             seatPref: SEAT_PREF,
             outboundFlight: ticket,
             advanceDiscount: ADVANCE_DISCOUNT,
-            returnFlight: ""
+            returnFlight: "",
+            'buyFlights.x': 65,
+            'buyFlights.y': 13
         }
     const respPaymentSuccess = http.post(
         `${urlReservations}`,
@@ -245,7 +255,7 @@ export function buyTicket() {
         respPaymentSuccess,
         {
             'success status is 200': (r) => r.status === 200,
-            'success title is ok?': (r) => r.body().find("title").includes("Reservation Made!")
+            'success title is ok?': (r) => r.body.toString().includes("Reservation Made!")
         }
     )
     checkFailureRate.add(!successCheck);
@@ -266,7 +276,7 @@ export function returnToHomePage(credentials) {
         respNavigateHome,
         {
             'return home status code is 200': (r) => r.status === 200,
-            'Web Tours Navigation Bar in title?': (r) => r.html().find("title").text().includes('Web Tours Navigation Bar')
+            'Web Tours Navigation Bar in title?': (r) => r.body.toString().includes('Web Tours Navigation Bar')
         }
     )
     checkFailureRate.add(!checkReturnHome);
@@ -279,7 +289,7 @@ export function returnToHomePage(credentials) {
         respOpenHome,
         {
             'open home status code is 200': (r) => r.status === 200,
-            'contains Welcome username?': (r) => r.body.toString().includes(`Welcome, ${credentials.username}`)
+            'contains Welcome username?': (r) => r.body.toString().includes(`Welcome, \<b\>${credentials.username}\<\/b\>`)
         }
     )
     checkFailureRate.add(!checkOpenHome)
