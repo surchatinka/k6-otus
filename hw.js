@@ -1,7 +1,7 @@
 import http from 'k6/http';
-import { check, group } from 'k6';
-import { SharedArray } from 'k6/data';
-import { Trend, Rate } from 'k6/metrics';
+import {check, group} from 'k6';
+import {SharedArray} from 'k6/data';
+import {Trend, Rate} from 'k6/metrics';
 
 
 const URL_1 = 'http://webtours.load-test.ru:1080';
@@ -9,187 +9,299 @@ const URL_2 = 'http://ya.ru';
 const URL_3 = 'http://www.ru';
 const checkFailureRate = new Rate('otus_check_failure_rate');
 
-const data = new SharedArray('get Users', function () {
-  const file = JSON.parse(open('./users.json'));
-  return file.users;
-  });
+const ADVANCE_DISCOUNT = 0;
+const SEAT_TYPE = "Coach";
+const SEAT_PREF = "None";
+const NUM_PASSENGERS = Math.ceil(Math.random() * 4);
 
-const random = Math.floor(Math.random() * data.length);
+const usersData = new SharedArray('get Users', function () {
+    const file = JSON.parse(open('./users.json'));
+    return file.users;
+});
 
-var headers = {
-    "Accept" : "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language" : "en-US,en;q=0.9",
-    "Accept-Encoding" : "gzip, deflate",
-    "Connection" : "Keep-Alive",
-    "Content-Type" : "text/html; charset=ISO-8859-1",
+const paymentData = new SharedArray('get payments', function () {
+    const file = JSON.parse(open('./payments.json'));
+    return file.payments;
+});
+
+const randomPay = Math.floor(Math.random() * paymentData.length);
+
+let headers = {
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate",
+    "Connection": "Keep-Alive",
     "Cache-Control": "no-cache"
 }
 
 // (`${BASE_URL}/api/tools`)
 
-export function login() {
-  const initParams = {
-    headers,
-    tags: { my_tag: 'webtours-login' }
-  };
+export function login(credentials) {
+    const initParams = {
+        headers,
+        tags: {my_tag: 'webtours-login'}
+    };
 
-  const resInit = http.get(`${URL_1}/webtours/`, initParams);
-  const checkResInit = check(
-    resInit,
-    { 'init status code messages is 200': (resInit) => resInit.status === 200 },
-    { my_tag: 'check webtours' },
-  );
-  checkFailureRate.add(!checkResInit);
+    const resInit = http.get(`${URL_1}/webtours/`, initParams);
+    const checkResInit = check(
+        resInit,
+        {'init status code messages is 200': (resInit) => resInit.status === 200},
+        {my_tag: 'check webtours'},
+    );
+    checkFailureRate.add(!checkResInit);
 
-  const responseHeader = http.get(`${URL_1}/webtours/header.html`, initParams);
-  const checkRespHeader = check(
-      responseHeader,
-      {
-          'header status code is 200': (r) => r.status === 200
-      },
-      { my_tag: 'check webtours' }
-  );
+    const responseHeader = http.get(`${URL_1}/webtours/header.html`, initParams);
+    const checkRespHeader = check(
+        responseHeader,
+        {
+            'header status code is 200': (r) => r.status === 200
+        },
+        {my_tag: 'check webtours'}
+    );
+    checkFailureRate.add(!checkRespHeader);
 
-  const signOffParam = 'true';
-  const urlWelcome = `${URL_1}/cgi-bin/welcome.pl?signOff=${signOffParam}`
-  const responseWelcome = http.get(urlWelcome, initParams);
-  const checkResGetCookie = check(
-    responseWelcome,
-    {
-      'welcome status code is 200': (r) => r.status === 200,
-      "has cookie 'Set-Cookie'": (r) => r.headers['Set-Cookie'] !== undefined,
-    },
-    { my_tag: 'check webtours' }
-  );
-  checkFailureRate.add(!checkResGetCookie);
+    const signOffParam = 'true';
+    const responseWelcome = http.get(`${URL_1}/cgi-bin/welcome.pl?signOff=${signOffParam}`, initParams);
+    const checkResGetCookie = check(
+        responseWelcome,
+        {
+            'welcome status code is 200': (r) => r.status === 200,
+            "has cookie 'Set-Cookie'": (r) => r.headers['Set-Cookie'] !== undefined,
+        },
+        {my_tag: 'check webtours'}
+    );
+    checkFailureRate.add(!checkResGetCookie);
 
-  const inParam = 'home';
-  const navHomeURL = `${URL_1}/cgi-bin/nav.pl?in=${inParam}`
-  const responseNavHome = http.get(navHomeURL,initParams)
-  const checkResNavHome = check(
-      responseNavHome,
-      {
-          'nav-home status code is 200': (r) => r.status === 200,
-          "userSession in response": (r) => r.body.includes("userSession"),
-      },
-      { my_tag: 'check webtours' }
-  );
-  const userSession = responseNavHome.html().find('input[name="userSession"]').attr("value")
+    const inParam = 'home';
+    const responseNavHome = http.get(`${URL_1}/cgi-bin/nav.pl?in=${inParam}`, initParams)
+    const checkResNavHome = check(
+        responseNavHome,
+        {
+            'nav-home status code is 200': (r) => r.status === 200,
+            "userSession in response": (r) => r.body.includes("userSession"),
+        },
+        {my_tag: 'check webtours'}
+    );
+    const userSession = responseNavHome.html().find('input[name="userSession"]').attr("value")
+    checkFailureRate.add(!checkResNavHome);
 
-    const credentials = data[random];
-  const loginPayload = {
-      username: credentials.username,
-      password: credentials.password,
-      userSession: userSession,
-      "login.x" :	54,
-      "login.y":	11,
-      JSFormSubmit:	"off"
-  };
-
-  // console.log("loginPayload\n", loginPayload)
-
-  const urlLogin = `${URL_1}/cgi-bin/login.pl`
-  const resLogin = http.post(
-      urlLogin,
-      JSON.stringify(loginPayload),
-      initParams,
-      );
-
-
-  const checkResLogin = check(
-      resLogin,
+    const loginPayload = {
+        username: credentials.username,
+        password: credentials.password,
+        userSession: userSession,
+        'login.x':	54,
+        'login.y':	11,
+    };
+    const urlLogin = `${URL_1}/cgi-bin/login.pl`
+    const resLogin = http.post(
+        urlLogin,
+        loginPayload,
+        {headers: {'Content-Type': 'application/x-www-form-urlencoded'}},
+    );
+    const checkResLogin = check(
+        resLogin,
         {
             'login status code is 200': (r) => r.status === 200,
             "Password correct?": (r) => r.body.toString().includes('User password was correct'),
         },
-        { my_tag: 'check webtours' }
+        {my_tag: 'check webtours'}
     );
+    checkFailureRate.add(!checkResLogin);
+}
+
+export function buyTicket() {
+    const ticketParams = {
+        headers,
+        tags: {my_tag: 'webtours-ticket'}
+    };
+
+    const respFlights = http.get(
+        `${URL_1}/cgi-bin/nav.pl?page=menu&in=flights`,
+        ticketParams
+    )
+    const checkFlights = check(
+        respFlights,
+        {
+            'flights page status code is 200': (r) => r.status === 200,
+            'Web Tours Navigation Bar in title?': (r) => r.body.toString().includes('Web Tours Navigation Bar')
+        }
+    )
+    checkFailureRate.add(!checkFlights);
+
+    const urlReservations = `${URL_1}/cgi-bin/reservations.pl`
+    const respGetCities = http.get(
+        `${urlReservations}?page=welcome`
+    )
+    const checkCities = check(
+        respGetCities,
+        {
+            'cities page status code is 200': (r) => r.status === 200,
+            'phrase selected=\"selected\" on the page': (r) => r.body.toString().includes('selected=\"selected\"')
+        }
+    )
+    const cities = respGetCities.html().find("option");
+    let cityArrive, cityDeparture;
+    if (cities.size() >= 2) {
+        do {
+            const randArriveEl = cities.get(Math.floor(Math.random() * cities.size()));
+            const randDepartureEl = cities.get(Math.floor(Math.random() * cities.size()));
+            cityArrive = randArriveEl.textContent();
+            cityDeparture = randDepartureEl.textContent()
+        } while (cityArrive === cityDeparture);
+    } else if (cities.size() === 1) {
+        cityArrive = cityDeparture = cities.get(0).textContent;
+    }
+    checkFailureRate.add(!checkCities);
+
+    const returnDate = new Date();
+    const dateDeparture = new Date();
+    dateDeparture.setDate(dateDeparture.getDate() + 1);
+    returnDate.setDate(returnDate.getDate() + Math.ceil(Math.random() * 7) + 1)
+    const cityPayload = {
+        seatType: SEAT_TYPE,
+        seatPref: SEAT_PREF,
+        returnDate: returnDate,
+        numPassengers: NUM_PASSENGERS,
+        departDate: dateDeparture,
+        depart: cityDeparture,
+        arrive: cityArrive,
+        advanceDiscount: ADVANCE_DISCOUNT,
+        '.cgifields':	"roundtrip",
+        'findFlights.x':	Math.ceil(Math.random() * 70),
+        'findFlights.y':	Math.ceil(Math.random() * 20),
+    };
+    const respGetTickets = http.post(
+        `${urlReservations}`,
+        cityPayload,
+        {
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }}
+    )
+    const checkTicket = check(
+        respGetTickets,
+        {
+            'ticket status code is 200': (r) => r.status === 200,
+            "cityDeparture in response": (r) => r.body.toString().includes(`From ${cityDeparture}`),
+            "cityArrive in response": (r) => r.body.toString().includes(`To ${cityArrive}`)
+        }
+    )
+    checkFailureRate.add(!checkTicket);
+    const tickets = respGetTickets.html().find("input[name='outboundFlight']").attr("value")
+    const ticket = tickets.get(Math.floor(Math.random() * tickets.length))
 
 
+    // const tickets = respGetTickets.html().find("input[name='outboundFlight']").
+    // console.log("tickets", tickets)
+    // const ticket = tickets.get(Math.floor(Math.random() * tickets.length)).textContent()
 
+    const paymentPayload = {
+        seatType: SEAT_TYPE,
+        seatPref: SEAT_PREF,
+        outboundFlight: ticket,
+        numPassengers: NUM_PASSENGERS,
+        advanceDiscount: ADVANCE_DISCOUNT
+    }
+    const respGetPayment = http.post(
+        `${urlReservations}`,
+        paymentPayload,
+        {headers: {'Content-Type': 'application/x-www-form-urlencoded'}},
+    )
+    const checkPayment = check(
+        respGetPayment,
+        {
+            'get payment status code is 200': (r) => r.status === 200,
+            'get payment title check': (r) => r.html().find("title").includes("Flight Reservation")
+        }
+    )
+    checkFailureRate.add(!checkPayment)
+
+
+    const payment = paymentData[randomPay];
+    ``
+    const summarizePayload =
+        {
+            firstName: payment.firstName,
+            lastName: payment.lastName,
+            address1: payment.address1,
+            address2: payment.address2,
+            pass1: `${payment.firstName} ${payment.lastName}`,
+            creditCard: payment.creditCard,
+            expDate: payment.expDate,
+
+            numPassengers: NUM_PASSENGERS,
+            seatType: SEAT_TYPE,
+            seatPref: SEAT_PREF,
+            outboundFlight: ticket,
+            advanceDiscount: ADVANCE_DISCOUNT,
+            returnFlight: ""
+        }
+    const respPaymentSuccess = http.post(
+        `${urlReservations}`,
+        summarizePayload,
+        {headers: {'Content-Type': 'application/x-www-form-urlencoded'}},
+    )
+    const successCheck = check(
+        respPaymentSuccess,
+        {
+            'success status is 200': (r) => r.status === 200,
+            'success title is ok?': (r) => r.body().find("title").includes("Reservation Made!")
+        }
+    )
+    checkFailureRate.add(!successCheck);
+}
+
+export function returnToHomePage(credentials) {
+
+    const returnHomeParams = {
+        headers,
+        tags: {my_tag: 'webtours-home-page'}
+    };
+
+    const respNavigateHome = http.get(
+        `${URL_1}/cgi-bin/nav.pl?page=menu&in=home`,
+        returnHomeParams
+    )
+    const checkReturnHome = check(
+        respNavigateHome,
+        {
+            'return home status code is 200': (r) => r.status === 200,
+            'Web Tours Navigation Bar in title?': (r) => r.html().find("title").text().includes('Web Tours Navigation Bar')
+        }
+    )
+    checkFailureRate.add(!checkReturnHome);
+
+    const respOpenHome = http.get(
+        `${URL_1}/cgi-bin/login.pl?intro=true`,
+        returnHomeParams
+    )
+    const checkOpenHome = check(
+        respOpenHome,
+        {
+            'open home status code is 200': (r) => r.status === 200,
+            'contains Welcome username?': (r) => r.body.toString().includes(`Welcome, ${credentials.username}`)
+        }
+    )
+    checkFailureRate.add(!checkOpenHome)
 }
 
 
 export default function () {
-  group('login', () => { login(); });
+    const randomCred = Math.floor(Math.random() * usersData.length);
+    const credentials = usersData[randomCred];
+
+    group('login', () => {
+        login(credentials);
+    });
+    group('buyTicket', () => {
+        buyTicket(credentials);
+    });
+    group('returnToHomePage', () => {
+        returnToHomePage(credentials);
+    });
 }
 
 //Scenario 1
-
-// GET http://webtours.load-test.ru:1080/WebTours/home.html 
-// response contains - To make reservations,please enter your account information to the left
-// check(res, {
-//     'verify homepage text': (r) =>
-//       r.body.includes('Collection of simple web-pages suitable for load testing'),
-//   });
-
-// GET http://webtours.load-test.ru:1080/cgi-bin/nav.pl?page=menu&in=home 
-// <title>Web Tours Navigation Bar</title>
-
-
-// POST http://webtours.load-test.ru:1080/cgi-bin/login.pl HTTP/1.1
-// userSession	144688.675253139HttctcDpHDDDDDDDttzftpftct
-// username	efim2
-// password	pass2
-//// login.x	54
-//// login.y	11
-//// JSFormSubmit	off
-// response - User password was correct
-
-
-// GET http://webtours.load-test.ru:1080/cgi-bin/nav.pl?page=menu&in=home 
-// <title>Web Tours Navigation Bar</title>
-
-
-// GET http://webtours.load-test.ru:1080/cgi-bin/login.pl?intro=true 
-// Don't forget to sign off
-
-
-// GET http://webtours.load-test.ru:1080/cgi-bin/welcome.pl?page=search HTTP
-// User has returned to the search page.  
-
-
-// GET http://webtours.load-test.ru:1080/cgi-bin/nav.pl?page=menu&in=flights 
-// <title>Web Tours Navigation Bar</title>
-
-
-// GET http://webtours.load-test.ru:1080/cgi-bin/reservations.pl?page=welcome 
-// response -   <option selected="selected" value="Denver">Denver</option>
-//              <option value="Frankfurt">Frankfurt</option>
-
-
-// POST /cgi-bin/reservations.pl HTTP/1.1
-// seatType	Coach
-// seatPref	None
-// returnDate	08/10/2026
-// numPassengers	1
-//// findFlights.y	10
-//// findFlights.x	60
-// departDate	08/09/2026
-// depart	San Francisco
-// arrive	Seattle
-// advanceDiscount	0
-// .cgifields	roundtrip
-// .cgifields	seatType
-// .cgifields	seatPref
-// response - 
-// contains - <!-- From San Francisco (6) To Seattle (7) -->
-//<tr bgcolor="#EFF2F7"><td align="center"><input type="radio" name="outboundFlight" value="670;86;08/09/2026" checked="checked" >Blue Sky Air 670<td align="center">8am<td align="center">$ 86</TD></TR><tr bgcolor="#EFF2F7"><td align="center"><input type="radio" name="outboundFlight" value="671;77;08/09/2026">Blue Sky Air 671<td align="center">1pm<td align="center">$ 77</TD></TR><tr bgcolor="#EFF2F7"><td align="center"><input type="radio" name="outboundFlight" value="672;82;08/09/2026">Blue Sky Air 672<td align="center">5pm<td align="center">$ 82</TD></TR><tr bgcolor="#EFF2F7"><td align="center"><input type="radio" name="outboundFlight" value="673;71;08/09/2026">Blue Sky Air 673<td align="center">11pm<td align="center">$ 71</TD></TR></table>
-
-
-// POST /cgi-bin/reservations.pl HTTP/1.1
-// seatType	Coach
-// seatPref	None
-// reserveFlights.y	7
-// reserveFlights.x	37
-// outboundFlight	673;71;08/09/2026
-// numPassengers	1
-// advanceDiscount	0
-// response contains <title>Flight Reservation</title>
-
-
-//POST /cgi-bin/reservations.pl HTTP/1.1
-// response contains <title>Reservation Made!</title>
 
 
 // GET /cgi-bin/welcome.pl?page=menus HTTP/1.1
@@ -201,9 +313,7 @@ export default function () {
 
 
 // GET /cgi-bin/login.pl?intro=true HTTP/1.1
-// response contains <title>Welcome to Web Tours</title>
-
-
+// response contains Welcome, efim2
 
 
 //Scenario 2

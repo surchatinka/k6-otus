@@ -1,0 +1,13 @@
+{
+  "payments": [
+    {"firstname" : "Efim", "lastname": "Klaus", "address1": "Some Street",
+      "address2": "Some City in Some State with Some Zip", "creditCard": "44442220042", "expDate": "11/11"
+    },
+    {"firstname" : "Alicia", "lastname": "Dessendre", "address1": "près d'une boulangerie",
+      "address2": " Lumière", "creditCard": "3333333333333", "expDate": "03/33"
+    },
+    {"firstname" : "Drake", "lastname": "Mallard", "address1": "537 Avian Way",
+      "address2": "St. Canard", "creditCard": "199019901990", "expDate": "11/11"
+    }
+  ]
+}
