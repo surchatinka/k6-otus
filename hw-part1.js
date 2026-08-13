@@ -1,7 +1,7 @@
 import http from 'k6/http';
 import {check, group} from 'k6';
 import {SharedArray} from 'k6/data';
-import {Trend, Rate} from 'k6/metrics';
+import {Rate} from 'k6/metrics';
 
 const URL_1 = 'http://webtours.load-test.ru:1080';
 const URL_2 = 'http://ya.ru';
@@ -326,15 +326,3 @@ export default function () {
 // response contains Welcome, efim2
 
 
-//Scenario 2
-// http.get('http://ya.ru');
-// http.get('http://wwww.ru'); 
-// В течение 5 минут разгоняемся до 100% профиля
-// В течение 10 минут подаём равномерную нагрузку в 100% профиля
-// В течение 5 минут разгоняемся до 120% профиля
-// В течение 10 минут подаём 120% профиля
-// 100% профиля выглядит так:
-
-// ya.ru = 60 запросов в минуту
-// www.ru = 120 запросов в минуту
-  
