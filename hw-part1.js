@@ -3,9 +3,8 @@ import {check, group} from 'k6';
 import {SharedArray} from 'k6/data';
 import {Rate} from 'k6/metrics';
 
-const URL_1 = 'http://webtours.load-test.ru:1080';
-const URL_2 = 'http://ya.ru';
-const URL_3 = 'http://www.ru';
+const URL = 'http://webtours.load-test.ru:1080';
+
 const checkFailureRate = new Rate('otus_check_failure_rate');
 const ADVANCE_DISCOUNT = 0;
 const SEAT_TYPE = "Coach";
@@ -34,15 +33,13 @@ let headers = {
     "Cache-Control": "no-cache"
 }
 
-// (`${BASE_URL}/api/tools`)
-
 export function login(credentials) {
     const initParams = {
         headers,
         tags: {my_tag: 'webtours-login'}
     };
 
-    const resInit = http.get(`${URL_1}/webtours/`, initParams);
+    const resInit = http.get(`${URL}/webtours/`, initParams);
     const checkResInit = check(
         resInit,
         {'init status code messages is 200': (resInit) => resInit.status === 200},
@@ -50,7 +47,7 @@ export function login(credentials) {
     );
     checkFailureRate.add(!checkResInit);
 
-    const responseHeader = http.get(`${URL_1}/webtours/header.html`, initParams);
+    const responseHeader = http.get(`${URL}/webtours/header.html`, initParams);
     const checkRespHeader = check(
         responseHeader,
         {
@@ -61,7 +58,7 @@ export function login(credentials) {
     checkFailureRate.add(!checkRespHeader);
 
     const signOffParam = 'true';
-    const responseWelcome = http.get(`${URL_1}/cgi-bin/welcome.pl?signOff=${signOffParam}`, initParams);
+    const responseWelcome = http.get(`${URL}/cgi-bin/welcome.pl?signOff=${signOffParam}`, initParams);
     const checkResGetCookie = check(
         responseWelcome,
         {
@@ -73,7 +70,7 @@ export function login(credentials) {
     checkFailureRate.add(!checkResGetCookie);
 
     const inParam = 'home';
-    const responseNavHome = http.get(`${URL_1}/cgi-bin/nav.pl?in=${inParam}`, initParams)
+    const responseNavHome = http.get(`${URL}/cgi-bin/nav.pl?in=${inParam}`, initParams)
     const checkResNavHome = check(
         responseNavHome,
         {
@@ -90,7 +87,7 @@ export function login(credentials) {
         password: credentials.password,
         userSession: userSession
     };
-    const urlLogin = `${URL_1}/cgi-bin/login.pl`
+    const urlLogin = `${URL}/cgi-bin/login.pl`
     const resLogin = http.post(
         urlLogin,
         loginPayload,
@@ -114,7 +111,7 @@ export function buyTicket() {
     };
 
     const respFlights = http.get(
-        `${URL_1}/cgi-bin/nav.pl?page=menu&in=flights`,
+        `${URL}/cgi-bin/nav.pl?page=menu&in=flights`,
         ticketParams
     )
     const checkFlights = check(
@@ -126,7 +123,7 @@ export function buyTicket() {
     )
     checkFailureRate.add(!checkFlights);
 
-    const urlReservations = `${URL_1}/cgi-bin/reservations.pl`
+    const urlReservations = `${URL}/cgi-bin/reservations.pl`
     const respGetCities = http.get(
         `${urlReservations}?page=welcome`
     )
@@ -269,7 +266,7 @@ export function returnToHomePage(credentials) {
     };
 
     const respNavigateHome = http.get(
-        `${URL_1}/cgi-bin/nav.pl?page=menu&in=home`,
+        `${URL}/cgi-bin/nav.pl?page=menu&in=home`,
         returnHomeParams
     )
     const checkReturnHome = check(
@@ -282,7 +279,7 @@ export function returnToHomePage(credentials) {
     checkFailureRate.add(!checkReturnHome);
 
     const respOpenHome = http.get(
-        `${URL_1}/cgi-bin/login.pl?intro=true`,
+        `${URL}/cgi-bin/login.pl?intro=true`,
         returnHomeParams
     )
     const checkOpenHome = check(
